@@ -1,5 +1,26 @@
 # Open Deep Research
 
+## Deploy
+
+```bash
+helm upgrade --install mcp-deep-research ./k8s/charts --namespace mcp --values ./k8s/charts/values.yaml --kube-context aks-innfactoryai-prod
+```
+
+## Deploy with setting secrets
+
+```bash
+helm upgrade --install mcp-deep-research ./k8s/charts \
+    --namespace mcp \
+    --values ./k8s/charts/values.yaml \
+    --set secret.data.FIRECRAWL_KEY="$FIRECRAWL_KEY" \
+    --set secret.data.AZURE_OPENAI_API_INSTANCE_NAME="$AZURE_OPENAI_API_INSTANCE_NAME" \
+    --set secret.data.AZURE_OPENAI_API_DEPLOYMENT_NAME="$AZURE_OPENAI_API_DEPLOYMENT_NAME" \
+    --set secret.data.AZURE_OPENAI_API_KEY="$AZURE_OPENAI_API_KEY" \
+    --set secret.data.AZURE_OPENAI_API_VERSION="$AZURE_OPENAI_API_VERSION" \
+    --set env.CONTEXT_SIZE="$CONTEXT_SIZE" \
+    --kube-context aks-innfactoryai-prod
+```
+
 An AI-powered research assistant that performs iterative, deep research on any topic by combining search engines, web scraping, and large language models.
 
 The goal of this repo is to provide the simplest implementation of a deep research agent - e.g. an agent that can refine its research direction over time and deep dive into a topic. Goal is to keep the repo size at <500 LoC so it is easy to understand and build on top of.

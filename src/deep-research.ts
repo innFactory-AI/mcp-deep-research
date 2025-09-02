@@ -1,12 +1,12 @@
 import FirecrawlApp, { SearchResponse } from '@mendable/firecrawl-js';
-import { generateObject } from 'ai';
 import { compact } from 'lodash-es';
 import pLimit from 'p-limit';
 import { z } from 'zod';
 
-import { getModel, trimPrompt } from './ai/providers';
+import { trimPrompt } from './ai/providers';
 import { systemPrompt } from './prompt';
 import { UsageCounter } from './usage-counter';
+import { llm } from './ai/llm';
 
 function log(...args: any[]) {
   console.log(...args);
@@ -51,17 +51,8 @@ async function generateSerpQueries({
   learnings?: string[];
   usageCounter?: UsageCounter;
 }) {
-  const res = await generateObject({
-    model: getModel(),
-    system: systemPrompt(),
-    prompt: `Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a maximum of ${numQueries} queries, but feel free to return less if the original prompt is clear. Make sure each query is unique and not similar to each other: <prompt>${query}</prompt>\n\n${
-      learnings
-        ? `Here are some learnings from previous research, use them to generate more specific queries: ${learnings.join(
-            '\n',
-          )}`
-        : ''
-    }`,
-    schema: z.object({
+
+  const serpSchema = z.object({
       queries: z
         .array(
           z.object({
@@ -74,13 +65,33 @@ async function generateSerpQueries({
           }),
         )
         .describe(`List of SERP queries, max of ${numQueries}`),
-    }),
-  });
-  log(`Created ${res.object.queries.length} queries`, res.object.queries);
+    })
 
-  usageCounter?.addUsageTokens(getModel().modelId, res.usage);
+  const res = await llm.withStructuredOutput(serpSchema).invoke([
+    [
+      "system",
+      systemPrompt()
+    ],
+    [
+      "user",
+      `Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a maximum of ${numQueries} queries, but feel free to return less if the original prompt is clear. Make sure each query is unique and not similar to each other: <prompt>${query}</prompt>\n\n${
+      learnings
+        ? `Here are some learnings from previous research, use them to generate more specific queries: ${learnings.join(
+            '\n',
+          )}`
+        : ''
+    }`
+    ]
+  ]);
 
-  return res.object.queries.slice(0, numQueries);
+
+
+  
+  log(`Created ${res.queries.length} queries`, res.queries);
+
+  //usageCounter?.addUsageTokens(getModel().modelId, res.response_metadata);
+
+  return res.queries.slice(0, numQueries);
 }
 
 async function processSerpResult({
@@ -101,29 +112,34 @@ async function processSerpResult({
   );
   log(`Ran ${query}, found ${contents.length} contents`);
 
-  const res = await generateObject({
-    model: getModel(),
-    abortSignal: AbortSignal.timeout(60_000),
-    system: systemPrompt(),
-    prompt: trimPrompt(
-      `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
-        .map(content => `<content>\n${content}\n</content>`)
-        .join('\n')}</contents>`,
-    ),
-    schema: z.object({
-      learnings: z.array(z.string()).describe(`List of learnings, max of ${numLearnings}`),
-      followUpQuestions: z
-        .array(z.string())
-        .describe(
-          `List of follow-up questions to research the topic further, max of ${numFollowUpQuestions}`,
-        ),
-    }),
+  const processSerpSchema = z.object({
+    learnings: z.array(z.string()).describe(`List of learnings, max of ${numLearnings}`),
+    followUpQuestions: z
+      .array(z.string())
+      .describe(
+        `List of follow-up questions to research the topic further, max of ${numFollowUpQuestions}`,
+      ),
   });
-  log(`Created ${res.object.learnings.length} learnings`, res.object.learnings);
 
-  usageCounter?.addUsageTokens(getModel().modelId, res.usage);
+  const res = await llm.withStructuredOutput(processSerpSchema).invoke([
+    [
+      "system",
+      systemPrompt()
+    ],
+    [
+      "user",
+      trimPrompt(
+        `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
+          .map(content => `<content>\n${content}\n</content>`)
+          .join('\n')}</contents>`,
+      )
+    ]
+  ]);
+  log(`Created ${res.learnings.length} learnings`, res.learnings);
 
-  return res.object;
+  //usageCounter?.addUsageTokens(getModel().modelId, res.response_metadata);
+
+  return res;
 }
 
 export async function writeFinalReport({
@@ -141,22 +157,28 @@ export async function writeFinalReport({
     .map(learning => `<learning>\n${learning}\n</learning>`)
     .join('\n');
 
-  const res = await generateObject({
-    model: getModel(),
-    system: systemPrompt(),
-    prompt: trimPrompt(
-      `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
-    ),
-    schema: z.object({
-      reportMarkdown: z.string().describe('Final report on the topic in Markdown'),
-    }),
+  const finalReportSchema = z.object({
+    reportMarkdown: z.string().describe('Final report on the topic in Markdown'),
   });
 
-  usageCounter.addUsageTokens(getModel().modelId, res.usage);
+  const res = await llm.withStructuredOutput(finalReportSchema).invoke([
+    [
+      "system",
+      systemPrompt()
+    ],
+    [
+      "user",
+      trimPrompt(
+        `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
+      )
+    ]
+  ]);
+
+  //usageCounter.addUsageTokens(getModel().modelId, res.response_metadata);
 
   // Append the visited URLs section to the report
   const urlsSection = `\n\n## Sources\n\n${visitedUrls.map(url => `- ${url}`).join('\n')}`;
-  return res.object.reportMarkdown + urlsSection;
+  return res.reportMarkdown + urlsSection;
 }
 
 export async function writeFinalAnswer({
@@ -172,22 +194,28 @@ export async function writeFinalAnswer({
     .map(learning => `<learning>\n${learning}\n</learning>`)
     .join('\n');
 
-  const res = await generateObject({
-    model: getModel(),
-    system: systemPrompt(),
-    prompt: trimPrompt(
-      `Given the following prompt from the user, write a final answer on the topic using the learnings from research. Follow the format specified in the prompt. Do not yap or babble or include any other text than the answer besides the format specified in the prompt. Keep the answer as concise as possible - usually it should be just a few words or maximum a sentence. Try to follow the format specified in the prompt (for example, if the prompt is using Latex, the answer should be in Latex. If the prompt gives multiple answer choices, the answer should be one of the choices).\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from research on the topic that you can use to help answer the prompt:\n\n<learnings>\n${learningsString}\n</learnings>`,
-    ),
-    schema: z.object({
-      exactAnswer: z
-        .string()
-        .describe('The final answer, make it short and concise, just the answer, no other text'),
-    }),
+  const finalAnswerSchema = z.object({
+    exactAnswer: z
+      .string()
+      .describe('The final answer, make it short and concise, just the answer, no other text'),
   });
 
-  usageCounter.addUsageTokens(getModel().modelId, res.usage);
+  const res = await llm.withStructuredOutput(finalAnswerSchema).invoke([
+    [
+      "system",
+      systemPrompt()
+    ],
+    [
+      "user",
+      trimPrompt(
+        `Given the following prompt from the user, write a final answer on the topic using the learnings from research. Follow the format specified in the prompt. Do not yap or babble or include any other text than the answer besides the format specified in the prompt. Keep the answer as concise as possible - usually it should be just a few words or maximum a sentence. Try to follow the format specified in the prompt (for example, if the prompt is using Latex, the answer should be in Latex. If the prompt gives multiple answer choices, the answer should be one of the choices).\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from research on the topic that you can use to help answer the prompt:\n\n<learnings>\n${learningsString}\n</learnings>`,
+      )
+    ]
+  ]);
 
-  return res.object.exactAnswer;
+  //usageCounter.addUsageTokens(getModel().modelId, res.response_metadata);
+
+  return res.exactAnswer;
 }
 
 export async function deepResearch({
