@@ -6,7 +6,7 @@ httpPort: 3000
 httpTargetPort: 3000
 image:
   repository: ghcr.io/innfactory-ai/mcp-deep-research
-  tag: latest
+  tag: 1.1.0
 # Secret configuration - these values will be stored in a Kubernetes secret
 secret:
   enabled: true
