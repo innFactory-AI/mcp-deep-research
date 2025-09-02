@@ -8,4 +8,6 @@ COPY .env.local ./.env.local
 
 RUN npm install
 
-CMD ["npm", "run", "docker"]
+EXPOSE 3000 3001
+
+CMD ["sh", "-c", "npm run api & npm run mcp & wait"]

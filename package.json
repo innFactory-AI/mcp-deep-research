@@ -4,10 +4,10 @@
   "main": "index.ts",
   "scripts": {
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "tsx": "tsx --env-file=.env.local",
-    "start": "tsx --env-file=.env.local src/run.ts",
-    "api": "tsx --env-file=.env.local src/api.ts",
-    "mcp": "tsx --env-file=.env.local src/mcp.ts",
+    "tsx": "tsx ",
+    "start": "tsx src/run.ts",
+    "api": "tsx src/api.ts",
+    "mcp": "tsx src/mcp.ts",
     "docker": "tsx src/run.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -32,6 +32,7 @@
     "@modelcontextprotocol/sdk": "^1.17.3",
     "ai": "^4.1.17",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
     "express": "^4.18.3",
     "js-tiktoken": "^1.0.17",
     "lodash-es": "^4.17.21",

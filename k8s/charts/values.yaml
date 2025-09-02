@@ -1,0 +1,21 @@
+name: mcp-deep-research
+# MCP Server port configuration
+mcpPort: 8000
+mcpTargetPort: 8000
+httpTargetPort: 3000
+image:
+  repository: ghcr.io/innfactory-ai/mcp-deep-research
+  tag: 1.0.0
+
+# Secret configuration - these values will be stored in a Kubernetes secret
+secret:
+  enabled: true
+  name: mcp-deep-research-secret
+  data:
+    FIRECRAWL_KEY: ${FIRECRAWL_KEY}
+    OPENAI_KEY: ${OPENAI_KEY}
+    OPENAI_ENDPOINT: ${OPENAI_ENDPOINT}
+
+# Environment variables (non-secret)
+env:
+  CONTEXT_SIZE: ${CONTEXT_SIZE}

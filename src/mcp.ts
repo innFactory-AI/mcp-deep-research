@@ -4,12 +4,15 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import z from "zod";
 import { generateFeedback } from "./feedback";
 import { deepResearch } from "./deep-research";
+import dotenv from "dotenv"
+
+dotenv.config();
 
 
 const app = express();
 app.use(express.json());
 
-
+const port = process.env.MCP_PORT || 3052;
 
 app.post('/mcp', async (req: Request, res: Response) => {
   // In stateless mode, create a new instance of transport and server for each request
@@ -125,9 +128,7 @@ app.delete('/mcp', async (_: Request, res: Response) => {
   });
 
 
-// Start the server
-const PORT = 3001;
 
-  app.listen(PORT, () => {
-    console.log(`MCP Stateless Streamable HTTP Server listening on port ${PORT}`);
+  app.listen(port, () => {
+    console.log(`MCP Stateless Streamable HTTP Server listening on port ${port}`);
   });

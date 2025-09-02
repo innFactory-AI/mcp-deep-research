@@ -1,0 +1,65 @@
+name: Build and Publish
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  version:
+    name: Create Version
+    runs-on: ubuntu-latest
+    permissions: write-all
+    outputs:
+      version: ${{ steps.semantic-release.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: go-semantic-release/action@v1
+        id: semantic-release
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          update-file: package.json
+          changelog-generator-opt: 'emojis=true'
+  build:
+    name: Build and Deploy Docker Image
+    needs: version
+    uses: innFactory-AI/templates/.github/workflows/build-only.yaml@main
+    permissions: write-all
+    with:
+      service: 'mcp-deep-research'
+      version: ${{ needs.version.outputs.version }}
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN}}
+  updateHelmChart:
+    name: Update Helm Chart
+    needs: version
+    uses: innFactory-AI/templates/.github/workflows/update-chart.yaml@main
+    permissions: write-all
+    with:
+      service: 'mcp-deep-research'
+      version: ${{ needs.version.outputs.version }}
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN}}
+  
+  # publishHelmChart:
+  #   name: Publish Helm Chart
+  #   needs: [updateHelmChart, version]
+  #   uses: innFactory-AI/templates/.github/workflows/publish-chart.yaml@main
+  #   permissions: write-all
+  #   with:
+  #     service: 'mcp-deep-research'
+  #     version: ${{ needs.version.outputs.version }}
+  #   secrets:
+  #     token: ${{ secrets.GITHUB_TOKEN}}

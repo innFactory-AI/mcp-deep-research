@@ -1,10 +1,13 @@
 import cors from 'cors';
 import express, { Request, Response } from 'express';
+import dotenv from "dotenv"
+dotenv.config();
 
 import { deepResearch, writeFinalAnswer,writeFinalReport } from './deep-research';
+import { UsageCounter } from './usage-counter';
 
 const app = express();
-const port = process.env.PORT || 3051;
+const port = process.env.HTTP_PORT || 3051;
 
 // Middleware
 app.use(cors());
@@ -15,9 +18,14 @@ function log(...args: any[]) {
   console.log(...args);
 }
 
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok' });
+});
+
 // API endpoint to run research
 app.post('/api/research', async (req: Request, res: Response) => {
   try {
+    const usageCounter = new UsageCounter();
     const { query, depth = 3, breadth = 3 } = req.body;
 
     if (!query) {
@@ -30,6 +38,7 @@ app.post('/api/research', async (req: Request, res: Response) => {
       query,
       breadth,
       depth,
+      usageCounter
     });
 
     log(`\n\nLearnings:\n\n${learnings.join('\n')}`);
@@ -37,15 +46,15 @@ app.post('/api/research', async (req: Request, res: Response) => {
       `\n\nVisited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}`,
     );
 
-    const answer = await writeFinalAnswer({
-      prompt: query,
-      learnings,
-    });
+    // const answer = await writeFinalAnswer({
+    //   prompt: query,
+    //   learnings,
+    //   usageCounter
+    // });
 
     // Return the results
     return res.json({
       success: true,
-      answer,
       learnings,
       visitedUrls,
     });
@@ -61,6 +70,7 @@ app.post('/api/research', async (req: Request, res: Response) => {
 // generate report API
 app.post('/api/generate-report',async(req:Request,res:Response)=>{
   try{
+    const usageCounter = new UsageCounter();
     const {query,depth = 3,breadth=3 } = req.body;
     if(!query){
       return res.status(400).json({error:'Query is required'});
@@ -69,7 +79,8 @@ app.post('/api/generate-report',async(req:Request,res:Response)=>{
     const {learnings,visitedUrls} = await deepResearch({
       query,
       breadth,
-      depth
+      depth,
+      usageCounter
     });
     log(`\n\nLearnings:\n\n${learnings.join('\n')}`);
     log(
@@ -78,7 +89,8 @@ app.post('/api/generate-report',async(req:Request,res:Response)=>{
     const report = await writeFinalReport({
       prompt:query,
       learnings,
-      visitedUrls
+      visitedUrls,
+      usageCounter
     });
 
     return report
